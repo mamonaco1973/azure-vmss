@@ -1,8 +1,8 @@
 # Azure VM Scale Set
 
-This project demonstrates a minimal Azure VM Scale Set (VMSS) deployment using Terraform. It provisions a fleet of Apache web servers behind an Azure Standard Load Balancer, with each instance displaying its own metadata — private IP, VM name, availability zone, and VM size — on a styled page.
+This project demonstrates a minimal Azure VM Scale Set (VMSS) deployment using Terraform. It provisions a fleet of Apache web servers behind an Azure Application Gateway, with each instance displaying its own metadata — private IP, VM name, availability zone, and VM size — on a styled page.
 
-Instances run on Standard_B1s Ubuntu VMs and are never directly reachable from the internet. All inbound traffic flows through the load balancer. A NAT Gateway provides outbound internet access for package installation. Azure Monitor autoscale rules drive automatic scale-out and scale-in between 1 and 6 instances based on CPU utilization.
+Instances run on Standard_B1s Ubuntu VMs and are never directly reachable from the internet. All inbound traffic flows through the Application Gateway. A NAT Gateway provides outbound internet access for package installation. Azure Monitor autoscale rules drive automatic scale-out and scale-in between 1 and 6 instances based on CPU utilization.
 
 This solution is ideal for understanding the fundamentals of Azure VM Scale Sets without the complexity of application-specific configuration. It uses no Packer, no custom image, and deploys in a single Terraform phase.
 
@@ -42,7 +42,7 @@ Run [check_env](check_env.sh) to validate your environment, then run [apply](app
 ./apply.sh
 ```
 
-[apply.sh](apply.sh) runs `terraform init` and `terraform apply`, then automatically calls [validate.sh](validate.sh) to confirm the deployment is healthy.
+[apply.sh](apply.sh) runs `terraform init` and `terraform apply`, then automatically calls [validate.sh](validate.sh) to confirm the deployment is healthy. Note that the Application Gateway takes 5-8 minutes to provision.
 
 ---
 
@@ -51,19 +51,20 @@ Run [check_env](check_env.sh) to validate your environment, then run [apply](app
 When the deployment completes, the following resources are created:
 
 - **Networking:**
-  - A VNet (10.0.0.0/16) with a single instance subnet (10.0.1.0/24) in centralus
+  - A VNet (10.0.0.0/16) in centralus with two subnets:
+    - `vmss-subnet` (10.0.1.0/24) — VMSS instances
+    - `appgw-subnet` (10.0.2.0/24) — Application Gateway (dedicated, required by Azure)
   - NAT Gateway with a static public IP for instance outbound access
-  - No public subnet required — the Azure LB frontend is a public IP, not subnet-based
 
 - **Security:**
-  - Network Security Group allowing inbound port 80 from the internet
-  - NSG associated with the VMSS subnet
+  - NSG on the VMSS subnet: allows inbound port 80
+  - NSG on the App Gateway subnet: allows port 80 and gateway manager ports 65200-65535
 
-- **Load Balancer:**
-  - Standard public Azure Load Balancer with a static frontend IP
-  - Backend pool that VMSS instances register into automatically
+- **Application Gateway:**
+  - Standard_v2, zone-redundant (zones 1 and 2)
+  - Static public IP with a unique DNS label (`vmss-appgw-<random>.centralus.cloudapp.azure.com`)
   - HTTP health probe on `/` with 10-second intervals
-  - LB rule forwarding port 80 to the backend pool
+  - Layer 7 per-request load balancing — even distribution across instances
 
 - **VM Scale Set:**
   - Ubuntu 22.04 LTS, Standard_B1s, spread across availability zones 1 and 2
@@ -86,25 +87,25 @@ The asymmetric evaluation windows (fast scale-out, slow scale-in) prevent thrash
 
 ### Validate the Deployment
 
-[validate.sh](validate.sh) is called automatically by [apply.sh](apply.sh). It polls the load balancer until it responds, then samples 6 responses to confirm load balancing is working. Different IP addresses across requests confirm that traffic is being distributed across instances.
+[validate.sh](validate.sh) is called automatically by [apply.sh](apply.sh). It polls the Application Gateway until it responds, then samples 6 responses to confirm load balancing is working. Because the Application Gateway is Layer 7, each request is routed independently — different IP addresses across requests confirm even distribution.
 
 ```
-NOTE: LB endpoint: http://20.x.x.x
-NOTE: Waiting for HTTP response from load balancer...
-NOTE: Load balancer is responding.
-NOTE: Sampling LB responses...
+NOTE: App Gateway endpoint: http://vmss-appgw-12345.centralus.cloudapp.azure.com
+NOTE: Waiting for HTTP response from Application Gateway...
+NOTE: Application Gateway is responding.
+NOTE: Sampling App Gateway responses...
 
-  [1] 10.0.1.6
-  [2] 10.0.1.8
-  [3] 10.0.1.6
-  [4] 10.0.1.9
-  [5] 10.0.1.8
+  [1] 10.0.1.4
+  [2] 10.0.1.6
+  [3] 10.0.1.5
+  [4] 10.0.1.7
+  [5] 10.0.1.4
   [6] 10.0.1.6
 
 =================================================================================
   VM Scale Set — Deployment validated!
 =================================================================================
-  LB : http://20.x.x.x
+  LB : http://vmss-appgw-12345.centralus.cloudapp.azure.com
 =================================================================================
 ```
 
@@ -118,4 +119,4 @@ When you are finished testing, you can remove all provisioned resources with:
 ./destroy.sh
 ```
 
-This will use Terraform to delete the resource group and everything inside it — VNet, NAT Gateway, load balancer, VM Scale Set, autoscale settings, NSG, and all associated public IPs.
+This will use Terraform to delete the resource group and everything inside it — VNet, NAT Gateway, Application Gateway, VM Scale Set, autoscale settings, NSGs, and all associated public IPs.
