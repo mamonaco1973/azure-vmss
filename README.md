@@ -53,7 +53,7 @@ When the deployment completes, the following resources are created:
 - **Networking:**
   - A VNet (10.0.0.0/16) with a single instance subnet (10.0.1.0/24) in eastus2
   - NAT Gateway with a static public IP for instance outbound access
-  - No public subnet needed — Azure LB is fronted by a public IP, not a subnet
+  - No public subnet required — the Azure LB frontend is a public IP, not subnet-based
 
 - **Security:**
   - Network Security Group allowing inbound port 80 from the internet
@@ -66,7 +66,7 @@ When the deployment completes, the following resources are created:
   - LB rule forwarding port 80 to the backend pool
 
 - **VM Scale Set:**
-  - Ubuntu 22.04 LTS, Standard_B1s, spread across zones 1 and 2
+  - Ubuntu 22.04 LTS, Standard_B1s, spread across availability zones 1 and 2
   - min 1, desired 4, max 6 instances
   - Apache installed via cloud-init; displays Azure IMDS metadata page
   - Azure Monitor autoscale driving scale-out and scale-in on CPU
