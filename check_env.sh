@@ -3,7 +3,7 @@ set -euo pipefail
 
 # ================================================================================
 # Environment Check
-# Validates required tools are installed and AWS credentials are active
+# Validates required tools are installed and Azure credentials are active
 # ================================================================================
 
 # ------------------------------------------------------------------------------
@@ -12,7 +12,7 @@ set -euo pipefail
 
 echo "NOTE: Validating that required commands are found in your PATH."
 
-for cmd in aws terraform; do
+for cmd in az terraform; do
   if ! command -v "$cmd" &>/dev/null; then
     echo "ERROR: $cmd is not found in PATH."
     exit 1
@@ -23,15 +23,16 @@ done
 echo "NOTE: All required commands are available."
 
 # ------------------------------------------------------------------------------
-# AWS Credentials
-# sts get-caller-identity is the cheapest way to confirm credentials are active
+# Azure Credentials
+# az account show is the cheapest way to confirm az login has been run
+# and the token has not expired
 # ------------------------------------------------------------------------------
 
-echo "NOTE: Checking AWS CLI connection."
+echo "NOTE: Checking Azure CLI connection."
 
-if ! aws sts get-caller-identity &>/dev/null; then
-  echo "ERROR: AWS credentials are not configured or have expired."
+if ! az account show &>/dev/null; then
+  echo "ERROR: Azure credentials are not configured. Run 'az login' first."
   exit 1
 fi
 
-echo "NOTE: Successfully connected to AWS."
+echo "NOTE: Successfully connected to Azure."

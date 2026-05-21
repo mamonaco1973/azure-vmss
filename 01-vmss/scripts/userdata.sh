@@ -2,30 +2,35 @@
 # ================================================================================
 # userdata.sh
 # Runs once on first boot via cloud-init. Installs Apache, fetches instance
-# metadata via IMDSv2, and writes an AWS-themed HTML page to the web root.
+# metadata via Azure IMDS, and writes an Azure-themed HTML page to the web root.
 # ================================================================================
 
-yum install -y httpd
+apt-get update -y
+# jq is needed to parse the Azure IMDS JSON response
+apt-get install -y apache2 jq
 
 # ------------------------------------------------------------------------------
 # Fetch Instance Metadata
-# IMDSv2 requires a session token — IMDSv1 is disabled on AL2023 by default
+# Azure IMDS requires the Metadata: true header but no session token, unlike
+# AWS IMDSv2. The response is JSON — jq extracts the fields we need.
 # ------------------------------------------------------------------------------
 
-TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
-  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+METADATA=$(curl -sf -H "Metadata: true" \
+  "http://169.254.169.254/metadata/instance?api-version=2021-02-01")
 
-IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
-  http://169.254.169.254/latest/meta-data/local-ipv4)
+IP=$(echo "$METADATA" | jq -r \
+  '.network.interface[0].ipv4.ipAddress[0].privateIpAddress')
 
-INSTANCE_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
-  http://169.254.169.254/latest/meta-data/instance-id)
+VM_NAME=$(echo "$METADATA" | jq -r '.compute.name')
 
-AZ=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
-  http://169.254.169.254/latest/meta-data/placement/availability-zone)
+# Zone is empty when the VMSS is not zone-pinned; fall back to location so
+# the HTML field always has a meaningful value
+ZONE=$(echo "$METADATA" | jq -r '.compute.zone')
+if [ -z "$ZONE" ] || [ "$ZONE" = "null" ]; then
+  ZONE=$(echo "$METADATA" | jq -r '.compute.location')
+fi
 
-INSTANCE_TYPE=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
-  http://169.254.169.254/latest/meta-data/instance-type)
+VM_SIZE=$(echo "$METADATA" | jq -r '.compute.vmSize')
 
 # ------------------------------------------------------------------------------
 # Write HTML Page
@@ -37,7 +42,7 @@ cat > /var/www/html/index.html <<HTMLEOF
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AWS Auto Scaling</title>
+  <title>Azure VM Scale Set</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -51,10 +56,10 @@ cat > /var/www/html/index.html <<HTMLEOF
     .card {
       background: #1A2535;
       border-radius: 6px;
-      border-top: 3px solid #FF9900;
+      border-top: 3px solid #0078D4;
       padding: 48px 52px;
       width: 480px;
-      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.15);
     }
     .badge-row {
       display: flex;
@@ -62,9 +67,9 @@ cat > /var/www/html/index.html <<HTMLEOF
       gap: 12px;
       margin-bottom: 28px;
     }
-    .aws-badge {
-      background: #FF9900;
-      color: #232F3E;
+    .azure-badge {
+      background: #0078D4;
+      color: #FFFFFF;
       font-size: 11px;
       font-weight: 800;
       padding: 3px 8px;
@@ -95,7 +100,7 @@ cat > /var/www/html/index.html <<HTMLEOF
       width: 50%;
     }
     .value {
-      color: #FF9900;
+      color: #0078D4;
       font-family: 'Courier New', Courier, monospace;
       font-size: 14px;
       font-weight: 600;
@@ -116,8 +121,8 @@ cat > /var/www/html/index.html <<HTMLEOF
 <body>
   <div class="card">
     <div class="badge-row">
-      <span class="aws-badge">AWS</span>
-      <span class="badge-label">EC2 Auto Scaling</span>
+      <span class="azure-badge">AZURE</span>
+      <span class="badge-label">VM Scale Set</span>
     </div>
     <div class="title">&#x2601; Instance Details</div>
     <table>
@@ -126,19 +131,19 @@ cat > /var/www/html/index.html <<HTMLEOF
         <td class="value">$IP</td>
       </tr>
       <tr>
-        <td class="label">Instance ID</td>
-        <td class="value">$INSTANCE_ID</td>
+        <td class="label">VM Name</td>
+        <td class="value">$VM_NAME</td>
       </tr>
       <tr>
-        <td class="label">Availability Zone</td>
-        <td class="value">$AZ</td>
+        <td class="label">Zone</td>
+        <td class="value">$ZONE</td>
       </tr>
       <tr>
-        <td class="label">Instance Type</td>
-        <td class="value">$INSTANCE_TYPE</td>
+        <td class="label">VM Size</td>
+        <td class="value">$VM_SIZE</td>
       </tr>
     </table>
-    <div class="footer">Amazon Web Services &bull; Auto Scaling Group</div>
+    <div class="footer">Microsoft Azure &bull; VM Scale Set</div>
   </div>
 </body>
 </html>
@@ -153,5 +158,5 @@ echo "$IP" > /var/www/html/plain
 # enable persists the service across reboots; start brings it up immediately
 # ------------------------------------------------------------------------------
 
-systemctl enable httpd
-systemctl start httpd
+systemctl enable apache2
+systemctl start apache2
