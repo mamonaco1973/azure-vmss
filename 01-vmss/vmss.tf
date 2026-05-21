@@ -13,7 +13,7 @@ resource "tls_private_key" "ssh" {
 # ================================================================================
 # Virtual Machine Scale Set
 # Maintains the desired number of Ubuntu instances spread across availability
-# zones 1 and 2 in eastus2. All instances register into the LB backend pool
+# zones 1 and 2 in centralus. All instances register into the LB backend pool
 # automatically — no manual target registration is required.
 #
 # Azure VMSS distributes instances across fault domains and zones automatically.
@@ -25,8 +25,9 @@ resource "azurerm_linux_virtual_machine_scale_set" "main" {
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
 
-  # Standard_B1s: 1 vCPU, 1 GiB RAM — ARM equivalent of t4g.micro in AWS.
-  # Burstable compute is well-suited for this demo workload.
+  # Standard_B1s: 1 vCPU, 1 GiB RAM — cheapest burstable SKU in Azure.
+  # ARM (Dpsv5 series) starts at 2 vCPU and costs more, so x86 B1s wins on
+  # price for small demo workloads.
   sku = "Standard_B1s"
 
   # Initial instance count — autoscale manages this after first apply.

@@ -51,7 +51,7 @@ Run [check_env](check_env.sh) to validate your environment, then run [apply](app
 When the deployment completes, the following resources are created:
 
 - **Networking:**
-  - A VNet (10.0.0.0/16) with a single instance subnet (10.0.1.0/24) in eastus2
+  - A VNet (10.0.0.0/16) with a single instance subnet (10.0.1.0/24) in centralus
   - NAT Gateway with a static public IP for instance outbound access
   - No public subnet required — the Azure LB frontend is a public IP, not subnet-based
 

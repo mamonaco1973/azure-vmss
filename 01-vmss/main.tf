@@ -38,7 +38,5 @@ provider "azurerm" {
 resource "azurerm_resource_group" "main" {
   name = "vmss-rg"
 
-  # eastus2 is Azure's analogue to AWS us-east-2 and typically has the broadest
-  # VM SKU availability and lowest latency to US-East workloads
-  location = "eastus2"
+  location = "centralus"
 }
