@@ -150,14 +150,15 @@ resource "azurerm_monitor_autoscale_setting" "main" {
       }
     }
 
-    # Scale in: remove one instance after CPU stays below 60% for 10 minutes
+    # Scale in: remove one instance after CPU stays below 60% for 60 minutes —
+    # long window prevents scale-in during demos and brief quiet periods
     rule {
       metric_trigger {
         metric_name        = "Percentage CPU"
         metric_resource_id = azurerm_linux_virtual_machine_scale_set.main.id
         time_grain         = "PT1M"
         statistic          = "Average"
-        time_window        = "PT10M"
+        time_window        = "PT1H"
         time_aggregation   = "Average"
         operator           = "LessThan"
         threshold          = 60
@@ -167,9 +168,7 @@ resource "azurerm_monitor_autoscale_setting" "main" {
         direction = "Decrease"
         type      = "ChangeCount"
         value     = 1
-        # 2-minute cooldown after scale-in matches scale-out cooldown —
-        # prevents immediate re-scaling if load briefly spikes post-removal
-        cooldown = "PT2M"
+        cooldown  = "PT2M"
       }
     }
   }

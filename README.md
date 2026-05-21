@@ -76,12 +76,12 @@ When the deployment completes, the following resources are created:
 
 ### Scaling Policies
 
-| Rule      | Condition  | Window   | Action      |
-|-----------|------------|----------|-------------|
-| scale-out | CPU > 60%  | 2 min    | +1 instance |
-| scale-in  | CPU < 60%  | 10 min   | -1 instance |
+| Rule      | Condition  | Window  | Action      |
+|-----------|------------|---------|-------------|
+| scale-out | CPU > 60%  | 2 min   | +1 instance |
+| scale-in  | CPU < 60%  | 1 hour  | -1 instance |
 
-The asymmetric evaluation windows (fast scale-out, slow scale-in) prevent thrashing under brief CPU spikes.
+The long scale-in window (1 hour) prevents instances from being removed during demos or brief quiet periods.
 
 ---
 
