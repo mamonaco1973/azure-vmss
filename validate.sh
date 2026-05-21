@@ -52,7 +52,7 @@ done
 echo "NOTE: Sampling App Gateway responses..."
 echo ""
 
-for i in $(seq 1 20); do
+for i in $(seq 1 10); do
   RESPONSE=$(curl -sf "http://${LB_HOST}/plain")
   echo "  [${i}] ${RESPONSE}"
 done
