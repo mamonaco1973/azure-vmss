@@ -15,6 +15,10 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
   }
 }
 
@@ -41,5 +45,9 @@ resource "azurerm_resource_group" "main" {
   location = "centralus"
 }
 
-# Used to generate a unique DNS label for the Application Gateway public IP
-data "azurerm_client_config" "current" {}
+# Generates a unique numeric suffix for the Application Gateway DNS label —
+# avoids collisions if the template is deployed multiple times in the same region
+resource "random_integer" "dns_suffix" {
+  min = 10000
+  max = 99999
+}

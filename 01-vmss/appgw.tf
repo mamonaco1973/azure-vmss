@@ -16,9 +16,9 @@ resource "azurerm_public_ip" "appgw" {
   zones               = ["1", "2"]
 
   # Unique DNS label scoped to centralus — gives a stable hostname without
-  # needing a custom domain. Suffix from subscription ID avoids collisions
-  # if the same template is deployed in the same region more than once.
-  domain_name_label = "vmss-appgw-${substr(data.azurerm_client_config.current.subscription_id, 0, 8)}"
+  # needing a custom domain. Random suffix avoids collisions if the template
+  # is deployed more than once in the same region.
+  domain_name_label = "vmss-appgw-${random_integer.dns_suffix.result}"
 
   tags = { Name = "vmss-appgw-pip" }
 }
