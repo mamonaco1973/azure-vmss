@@ -32,6 +32,16 @@ resource "azurerm_subnet" "vmss" {
   resource_group_name  = azurerm_resource_group.main.name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = ["10.0.1.0/24"]
+
+  # Disables Azure's default outbound access, which would otherwise assign
+  # a public IP to every instance automatically — forces all outbound traffic
+  # through the NAT gateway instead
+  default_outbound_access_enabled = false
+
+  # virtual_network_name resolves to a known string at plan time, so Terraform
+  # does not infer a runtime dependency — explicit depends_on is required to
+  # ensure the VNet exists before the subnet create request is made
+  depends_on = [azurerm_virtual_network.main]
 }
 
 # ================================================================================

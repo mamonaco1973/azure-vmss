@@ -54,7 +54,7 @@ resource "azurerm_linux_virtual_machine_scale_set" "main" {
   os_disk {
     # ReadWrite caching improves OS disk performance for read-heavy boot workloads
     caching              = "ReadWrite"
-    storage_account_type = "Standard_LRS"
+    storage_account_type = "StandardSSD_LRS"
   }
 
   # base64encode mirrors filebase64() in AWS — keeps the script external without
@@ -89,6 +89,14 @@ resource "azurerm_linux_virtual_machine_scale_set" "main" {
     # Terraform from fighting autoscale on every subsequent plan
     ignore_changes = [instances]
   }
+
+  # Instances boot and run cloud-init immediately on creation. The NAT gateway
+  # and NSG must be fully associated with the subnet before any instance starts,
+  # otherwise apt-get has no outbound internet access and apache2 never installs.
+  depends_on = [
+    azurerm_subnet_nat_gateway_association.vmss,
+    azurerm_subnet_network_security_group_association.vmss,
+  ]
 
   tags = { Name = "vmss-instance" }
 }
