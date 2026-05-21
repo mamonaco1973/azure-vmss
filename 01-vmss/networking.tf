@@ -45,6 +45,21 @@ resource "azurerm_subnet" "vmss" {
 }
 
 # ================================================================================
+# Application Gateway Subnet
+# Application Gateway v2 must occupy its own dedicated subnet — it cannot share
+# with VMSS instances or any other resource type.
+# ================================================================================
+
+resource "azurerm_subnet" "appgw" {
+  name                 = "appgw-subnet"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = ["10.0.2.0/24"]
+
+  depends_on = [azurerm_virtual_network.main]
+}
+
+# ================================================================================
 # NAT Gateway
 # Provides egress-only internet access for instances. Inbound connections from
 # the internet cannot be initiated through a NAT gateway — instances can reach

@@ -40,3 +40,6 @@ resource "azurerm_resource_group" "main" {
 
   location = "centralus"
 }
+
+# Used to generate a unique DNS label for the Application Gateway public IP
+data "azurerm_client_config" "current" {}

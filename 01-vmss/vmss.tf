@@ -71,8 +71,10 @@ resource "azurerm_linux_virtual_machine_scale_set" "main" {
       subnet_id = azurerm_subnet.vmss.id
 
       # Registering here causes Azure to add/remove instance NICs from the
-      # pool automatically as the scale set scales in and out
-      load_balancer_backend_address_pool_ids = [azurerm_lb_backend_address_pool.main.id]
+      # App Gateway backend pool automatically as the scale set scales in and out
+      application_gateway_backend_address_pool_ids = [
+        tolist(azurerm_application_gateway.main.backend_address_pool)[0].id
+      ]
     }
   }
 
