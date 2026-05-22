@@ -59,7 +59,7 @@ resource "azurerm_linux_virtual_machine_scale_set" "main" {
 
   # base64encode mirrors filebase64() in AWS — keeps the script external without
   # needing a templatefile() wrapper
-  custom_data = base64encode(file("${path.module}/scripts/userdata.sh"))
+  custom_data = base64encode(file("${path.module}/scripts/custom_data.sh"))
 
   network_interface {
     name    = "vmss-nic"
