@@ -8,6 +8,8 @@ Instances run on Standard_B1s Ubuntu VMs and are never directly reachable from t
 
 This solution is ideal for understanding the fundamentals of Azure VM Scale Sets without the complexity of application-specific configuration. It uses no Packer, no custom image, and deploys in a single Terraform phase.
 
+![vmss](vmss.png)
+
 ## Prerequisites
 
 * [An Azure Account](https://portal.azure.com/)
