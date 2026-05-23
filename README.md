@@ -2,6 +2,8 @@
 
 This project demonstrates a minimal Azure VM Scale Set (VMSS) deployment using Terraform. It provisions a fleet of Apache web servers behind an Azure Application Gateway, with each instance displaying its own metadata — private IP, VM name, availability zone, and VM size — on a styled page.
 
+![Azure diagram](azure-vmss.png)
+
 Instances run on Standard_B1s Ubuntu VMs and are never directly reachable from the internet. All inbound traffic flows through the Application Gateway. A NAT Gateway provides outbound internet access for package installation. Azure Monitor autoscale rules drive automatic scale-out and scale-in between 1 and 6 instances based on CPU utilization.
 
 This solution is ideal for understanding the fundamentals of Azure VM Scale Sets without the complexity of application-specific configuration. It uses no Packer, no custom image, and deploys in a single Terraform phase.
