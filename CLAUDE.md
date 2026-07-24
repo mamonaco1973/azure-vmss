@@ -23,6 +23,33 @@ Single Terraform phase in `01-vmss/`. No modules, no workspaces.
 - **Instance:** Standard_B2pts_v2 (2 vCPU, 1 GiB, Ampere ARM) — matches t4g.micro
 - **OS:** Ubuntu 24.04 LTS (arm64) — matches the AWS/GCP/OCI builds
 - **Boot log:** `/root/userdata.log` on each instance — full cloud-init trace
+- **Access:** no SSH ingress — use `az vmss run-command` (see below)
+
+## Debugging Instances
+
+Instances are private with no SSH ingress. Run Command reaches them through
+the Azure agent (wire server), not the network, so it works without a bastion:
+
+```bash
+az vmss list-instances -g vmss-rg -n vmss-main \
+  --query "[].{id:instanceId, name:name}" -o table
+
+az vmss run-command invoke -g vmss-rg -n vmss-main --instance-id 0 \
+  --command-id RunShellScript \
+  --scripts "cat /root/userdata.log" \
+  --query "value[0].message" -o tsv
+```
+
+If `/root/userdata.log` is missing, the script died before its `exec`
+redirect — check `cloud-init status --long` and
+`/var/log/cloud-init-output.log` instead. Note the redirect means script
+output no longer lands in `cloud-init-output.log`.
+
+If the agent itself is dead, fall back to boot diagnostics:
+
+```bash
+az vmss get-boot-log -g vmss-rg -n vmss-main --instance-id 0
+```
 - **LB:** Application Gateway Standard_v2 (L7) — per-request routing
 - **VMSS:** min 1, desired 4, max 6 across zones 1 and 2
 - **Scaling:** Azure Monitor autoscale, CPU-based

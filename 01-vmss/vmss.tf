@@ -67,6 +67,13 @@ resource "azurerm_linux_virtual_machine_scale_set" "main" {
     storage_account_type = "StandardSSD_LRS"
   }
 
+  # Serial console and boot log capture. Instances are private with no SSH
+  # ingress, so `az vmss run-command` is the normal way in — but that needs a
+  # live Azure agent. Boot diagnostics is the fallback for an instance that
+  # never gets that far. Empty block uses a managed storage account, so there
+  # is no storage resource to create, secure, or clean up on destroy.
+  boot_diagnostics {}
+
   # base64encode mirrors filebase64() in AWS — keeps the script external without
   # needing a templatefile() wrapper
   custom_data = base64encode(file("${path.module}/scripts/custom_data.sh"))
