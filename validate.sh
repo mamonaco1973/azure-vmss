@@ -76,8 +76,13 @@ done
 echo "NOTE: Sampling App Gateway responses..."
 echo ""
 
+# The wait loop above breaks on the FIRST 200, so only one instance is
+# guaranteed healthy here — the gateway will still route some samples to
+# instances that are mid-boot. A bare `curl -sf` returns non-zero on those,
+# and under `set -e` that aborts the script before the timing summary below
+# ever prints. Sampling is diagnostic, so a failed sample must not be fatal.
 for i in $(seq 1 10); do
-  RESPONSE=$(curl -sf "http://${LB_HOST}/plain")
+  RESPONSE=$(curl -sf --max-time 5 "http://${LB_HOST}/plain" || echo "(no response yet)")
   echo "  [${i}] ${RESPONSE}"
 done
 
