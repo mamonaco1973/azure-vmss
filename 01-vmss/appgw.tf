@@ -77,12 +77,12 @@ resource "azurerm_application_gateway" "main" {
 
   # HTTP health probe on / — a 200 response means apache2 is up and serving
   probe {
-    name                                      = "http-probe"
-    protocol                                  = "Http"
-    path                                      = "/"
-    interval                                  = 10
-    timeout                                   = 10
-    unhealthy_threshold                       = 2
+    name                = "http-probe"
+    protocol            = "Http"
+    path                = "/"
+    interval            = 10
+    timeout             = 10
+    unhealthy_threshold = 2
 
     # Inherit host header from backend HTTP settings rather than hard-coding
     # an IP, so the probe works regardless of instance IP assignment

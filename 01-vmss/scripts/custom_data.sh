@@ -5,6 +5,19 @@
 # metadata via Azure IMDS, and writes an Azure-themed HTML page to the web root.
 # ================================================================================
 
+# Redirect all stdout and stderr to the log file for post-boot debugging
+exec > /root/userdata.log 2>&1
+
+# ------------------------------------------------------------------------------
+# Install Apache
+# No network wait loop — the VMSS depends_on the NAT gateway and NSG subnet
+# associations, so outbound routing is guaranteed live before instances boot.
+# noninteractive suppresses prompts that would block a script with no TTY.
+# ------------------------------------------------------------------------------
+
+export DEBIAN_FRONTEND=noninteractive
+
+echo "NOTE: Installing apache2 and jq..."
 apt-get update -y
 # jq is needed to parse the Azure IMDS JSON response
 apt-get install -y apache2 jq
@@ -14,6 +27,8 @@ apt-get install -y apache2 jq
 # Azure IMDS requires the Metadata: true header but no session token, unlike
 # AWS IMDSv2. The response is JSON — jq extracts the fields we need.
 # ------------------------------------------------------------------------------
+
+echo "NOTE: Fetching instance metadata..."
 
 METADATA=$(curl -sf -H "Metadata: true" \
   "http://169.254.169.254/metadata/instance?api-version=2021-02-01")
@@ -35,6 +50,8 @@ VM_SIZE=$(echo "$METADATA" | jq -r '.compute.vmSize')
 # ------------------------------------------------------------------------------
 # Write HTML Page
 # ------------------------------------------------------------------------------
+
+echo "NOTE: Writing index.html..."
 
 cat > /var/www/html/index.html <<HTMLEOF
 <!DOCTYPE html>
@@ -155,8 +172,13 @@ echo "$IP" > /var/www/html/plain
 
 # ------------------------------------------------------------------------------
 # Start Apache
-# enable persists the service across reboots; start brings it up immediately
+# enable persists the service across reboots. The apt package already starts
+# apache2, so restart (not start) guarantees the freshly written index.html is
+# being served rather than silently no-oping.
 # ------------------------------------------------------------------------------
 
+echo "NOTE: Enabling and starting apache2..."
 systemctl enable apache2
-systemctl start apache2
+systemctl restart apache2
+
+echo "NOTE: Done."

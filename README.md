@@ -4,7 +4,7 @@ This project demonstrates a minimal Azure VM Scale Set (VMSS) deployment using T
 
 ![Azure diagram](azure-vmss.png)
 
-Instances run on Standard_B1s Ubuntu VMs and are never directly reachable from the internet. All inbound traffic flows through the Application Gateway. A NAT Gateway provides outbound internet access for package installation. Azure Monitor autoscale rules drive automatic scale-out and scale-in between 1 and 6 instances based on CPU utilization.
+Instances run on Standard_B2pts_v2 (Ampere ARM) Ubuntu VMs and are never directly reachable from the internet. All inbound traffic flows through the Application Gateway. A NAT Gateway provides outbound internet access for package installation. Azure Monitor autoscale rules drive automatic scale-out and scale-in between 1 and 6 instances based on CPU utilization.
 
 This solution is ideal for understanding the fundamentals of Azure VM Scale Sets without the complexity of application-specific configuration. It uses no Packer, no custom image, and deploys in a single Terraform phase.
 
@@ -71,7 +71,7 @@ When the deployment completes, the following resources are created:
   - Layer 7 per-request load balancing — even distribution across instances
 
 - **VM Scale Set:**
-  - Ubuntu 22.04 LTS, Standard_B1s, spread across availability zones 1 and 2
+  - Ubuntu 24.04 LTS (arm64), Standard_B2pts_v2, spread across availability zones 1 and 2
   - min 1, desired 4, max 6 instances
   - Apache installed via cloud-init; displays Azure IMDS metadata page
   - Azure Monitor autoscale driving scale-out and scale-in on CPU

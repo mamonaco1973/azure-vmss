@@ -25,10 +25,15 @@ resource "azurerm_linux_virtual_machine_scale_set" "main" {
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
 
-  # Standard_B1s: 1 vCPU, 1 GiB RAM — cheapest burstable SKU in Azure.
-  # ARM (Dpsv5 series) starts at 2 vCPU and costs more, so x86 B1s wins on
-  # price for small demo workloads.
-  sku = "Standard_B1s"
+  # Standard_B2pts_v2: 2 vCPU, 1 GiB RAM, Ampere Altra ARM, burstable.
+  # Chosen to match the AWS t4g.micro (also 2 vCPU / 1 GiB ARM burstable) so
+  # the cross-cloud comparison is not skewed by CPU architecture or core count.
+  #
+  # Azure has no 1-vCPU ARM size — every ARM series (Bpsv2, Dpsv5/v6,
+  # Dplsv5/v6) starts at 2 vCPU, so the old Standard_B1s (1 vCPU x86) had no
+  # direct ARM equivalent. Bpsv2 is the burstable ARM line; the Dpsv5 series
+  # referenced previously is the general-purpose one and is not comparable.
+  sku = "Standard_B2pts_v2"
 
   # Initial instance count — autoscale manages this after first apply.
   # ignore_changes prevents Terraform from overwriting autoscale's adjustments
@@ -42,12 +47,17 @@ resource "azurerm_linux_virtual_machine_scale_set" "main" {
     public_key = tls_private_key.ssh.public_key_openssh
   }
 
-  # Ubuntu 22.04 LTS (Jammy) — widely supported, long-term support until 2027.
-  # apache2 and jq are available in the default apt repositories.
+  # Ubuntu 24.04 LTS (Noble) — matches the AWS, GCP, and OCI builds so the
+  # cross-cloud comparison is not skewed by distro differences. Note the 24.04
+  # naming break: Canonical dropped the "0001-com-ubuntu-server-<codename>"
+  # offer scheme used through 22.04 in favour of "ubuntu-24_04-lts".
+  #
+  # The SKU must be server-arm64, not server — "server" is x86-only and will
+  # not boot on the Bpsv2 ARM size above.
   source_image_reference {
-    publisher = "Canonical"
-    offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts"
+    publisher = "canonical"
+    offer     = "ubuntu-24_04-lts"
+    sku       = "server-arm64"
     version   = "latest"
   }
 

@@ -20,7 +20,9 @@ Instances are private (no public IP); outbound access via NAT Gateway.
 Single Terraform phase in `01-vmss/`. No modules, no workspaces.
 
 - **Region:** centralus
-- **Instance:** Standard_B1s (1 vCPU, 1 GiB) — cheapest burstable in Azure
+- **Instance:** Standard_B2pts_v2 (2 vCPU, 1 GiB, Ampere ARM) — matches t4g.micro
+- **OS:** Ubuntu 24.04 LTS (arm64) — matches the AWS/GCP/OCI builds
+- **Boot log:** `/root/userdata.log` on each instance — full cloud-init trace
 - **LB:** Application Gateway Standard_v2 (L7) — per-request routing
 - **VMSS:** min 1, desired 4, max 6 across zones 1 and 2
 - **Scaling:** Azure Monitor autoscale, CPU-based
@@ -72,6 +74,21 @@ These three patterns are non-obvious and caused deployment failures:
   Terraform from overwriting autoscale's instance count adjustments.
 - **Azure IMDS:** No session token required — only `Metadata: true` header.
   Response is JSON; `jq` is needed to parse it.
+- **Ubuntu 24.04 image naming changed.** Through 22.04 Canonical used
+  `offer = "0001-com-ubuntu-server-jammy"` / `sku = "22_04-lts"`. For 24.04
+  it is `offer = "ubuntu-24_04-lts"` / `sku = "server"`. Carrying the old
+  scheme forward with a new version fails to find an image.
+- **ARM needs the arm64 image SKU.** `sku = "server"` is x86-only. Running an
+  ARM size (Bpsv2, Dpsv5/v6) requires `sku = "server-arm64"` — size and image
+  architecture must match or the VMSS fails to provision.
+- **Azure has no 1-vCPU ARM size.** Every ARM series starts at 2 vCPU, so
+  there is no ARM equivalent of Standard_B1s. Standard_B2pts_v2 (2 vCPU,
+  1 GiB) is the burstable ARM analog of AWS t4g.micro. Verify availability
+  per region — ARM zonal coverage is thinner than x86:
+  ```bash
+  az vm list-skus -l centralus --resource-type virtualMachines \
+    --query "[?starts_with(name,'Standard_B2p')].{name:name, zones:locationInfo[0].zones}" -o table
+  ```
 - **Azure portal public IP display:** The portal shows the NAT Gateway's
   shared egress IP on the instance overview. Instances have no dedicated
   public IP — this display is cosmetically misleading.
