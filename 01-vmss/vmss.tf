@@ -25,15 +25,15 @@ resource "azurerm_linux_virtual_machine_scale_set" "main" {
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
 
-  # Standard_B2pts_v2: 2 vCPU, 1 GiB RAM, Ampere Altra ARM, burstable.
-  # Chosen to match the AWS t4g.micro (also 2 vCPU / 1 GiB ARM burstable) so
-  # the cross-cloud comparison is not skewed by CPU architecture or core count.
+  # Standard_B1s: 1 vCPU, 1 GiB RAM — cheapest burstable SKU in Azure.
   #
-  # Azure has no 1-vCPU ARM size — every ARM series (Bpsv2, Dpsv5/v6,
-  # Dplsv5/v6) starts at 2 vCPU, so the old Standard_B1s (1 vCPU x86) had no
-  # direct ARM equivalent. Bpsv2 is the burstable ARM line; the Dpsv5 series
-  # referenced previously is the general-purpose one and is not comparable.
-  sku = "Standard_B2pts_v2"
+  # ARM was tried here (Standard_B2pts_v2) to match the AWS t4g.micro, but the
+  # standardBpsv2Family core quota defaults to 0 on new subscriptions and the
+  # deploy fails with a 409. Note that `az vm list-skus` reports the size as
+  # available with no restrictions — SKU restrictions and quota are separate
+  # systems, and the SKU check does not see quota. x86 B1s needs no quota
+  # request, so the demo stays reproducible for anyone cloning this repo.
+  sku = "Standard_B1s"
 
   # Initial instance count — autoscale manages this after first apply.
   # ignore_changes prevents Terraform from overwriting autoscale's adjustments
@@ -52,12 +52,12 @@ resource "azurerm_linux_virtual_machine_scale_set" "main" {
   # naming break: Canonical dropped the "0001-com-ubuntu-server-<codename>"
   # offer scheme used through 22.04 in favour of "ubuntu-24_04-lts".
   #
-  # The SKU must be server-arm64, not server — "server" is x86-only and will
-  # not boot on the Bpsv2 ARM size above.
+  # "server" is the x86_64 SKU and must match the x86 size above. Switching to
+  # an ARM size would also require sku = "server-arm64".
   source_image_reference {
     publisher = "canonical"
     offer     = "ubuntu-24_04-lts"
-    sku       = "server-arm64"
+    sku       = "server"
     version   = "latest"
   }
 
