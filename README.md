@@ -1,97 +1,77 @@
-# Azure VM Scale Set
+# Azure VM Scale Set behind an Application Gateway
 
-This project demonstrates a minimal Azure VM Scale Set (VMSS) deployment using Terraform. It provisions a fleet of Apache web servers behind an Azure Application Gateway, with each instance displaying its own metadata — private IP, VM name, availability zone, and VM size — on a styled page.
+A minimal **Azure Virtual Machine Scale Set** built with Terraform. Apache
+web servers run on private Ubuntu 24.04 instances behind an **Application
+Gateway**, and each one serves a page with its own instance metadata
+(private IP, VM name, zone and size) from the Azure Instance Metadata
+Service. **Azure Monitor autoscale** grows and shrinks the set on CPU.
+There's no Packer and no custom image: one Terraform phase does it all.
 
-![Azure diagram](azure-vmss.png)
+![The instance metadata page](vmss.png)
 
-Instances run on Standard_B1s Ubuntu VMs and are never directly reachable from the internet. All inbound traffic flows through the Application Gateway. A NAT Gateway provides outbound internet access for package installation. Azure Monitor autoscale rules drive automatic scale-out and scale-in between 1 and 6 instances based on CPU utilization.
+| Piece | Where | Role |
+|---|---|---|
+| **vmss-appgw** | `appgw-subnet` (`10.0.2.0/24`) | Application Gateway Standard_v2, capacity 1, zones 1 and 2; HTTP listener on 80; per-request routing to the backend pool with no cookie affinity; health probe on `/` every 10 seconds |
+| **vmss-appgw-pip** | public IP | Standard static, zones 1 and 2; DNS label `vmss-appgw-<10000-99999>.centralus.cloudapp.azure.com` |
+| **vmss-main** | `vmss-subnet` (`10.0.1.0/24`) | Ubuntu 24.04, `Standard_B1s`, StandardSSD; 4 instances to start, zones 1 and 2; no public IPs; manual upgrade mode; `custom_data.sh` installs Apache and jq and writes the metadata page and `/plain` (just the private IP) |
+| **vmss-autoscale** | Azure Monitor | 1 to 6 instances, default 4; see [Scaling](#scaling) |
+| **vmss-nat** | `vmss-subnet` | NAT gateway with `vmss-nat-pip`; the subnet's default outbound access is off, so this is the only way out |
+| **vmss-nsg** | `vmss-subnet` | HTTP (80) in |
+| **appgw-nsg** | `appgw-subnet` | `GatewayManager` on 65200-65535 (Azure requires it) and HTTP (80) in |
+| **vmss-vnet** | `vmss-rg`, `centralus` | `10.0.0.0/16` |
 
-This solution is ideal for understanding the fundamentals of Azure VM Scale Sets without the complexity of application-specific configuration. It uses no Packer, no custom image, and deploys in a single Terraform phase.
+## Architecture
 
-![vmss](vmss.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="architecture-dark.svg">
+  <img alt="Requests from a browser or curl reach vmss-appgw, a zone-redundant Standard_v2 Application Gateway on HTTP port 80, which balances them per request across the instances in vmss-main's backend pool and health-checks them on /. vmss-main is a scale set of Ubuntu 24.04 Standard_B1s instances in zones 1 and 2 with no public IPs, each serving an Apache page built from its instance metadata. An Azure Monitor autoscale setting adds an instance when average CPU is above 60% over two minutes and removes one when it is below 60% over an hour, between 1 and 6. A NAT gateway gives the instances outbound access." src="architecture-light.svg">
+</picture>
+
+Regenerate with `python3 make_diagram.py`.
+
+Everything is in **`01-vmss/`**: `appgw.tf`, `vmss.tf` (scale set and
+autoscale), `networking.tf` (VNet, subnets, NAT gateway), `security.tf`
+(NSGs) and `scripts/custom_data.sh`.
+
+## Scaling
+
+| Rule | Condition | Window | Action | Cooldown |
+|---|---|---|---|---|
+| scale out | average CPU > 60% | 2 minutes | +1 instance | 2 minutes |
+| scale in | average CPU < 60% | 1 hour | -1 instance | 2 minutes |
+
+The hour-long scale-in window keeps instances from disappearing during a
+demo or a short quiet spell. The scale set ignores changes to its instance
+count in Terraform, so a later `apply` doesn't undo what autoscale did.
 
 ## Prerequisites
 
 * [An Azure Account](https://portal.azure.com/)
 * [Install Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)
-* [Install Latest Terraform](https://developer.hashicorp.com/terraform/install)
+* [Install Terraform](https://developer.hashicorp.com/terraform/install)
 
-If this is your first time watching our content, we recommend starting with this video: [Azure + Terraform: Easy Setup](https://youtu.be/BCMQo0CB9wk). It provides a step-by-step guide to properly configure Terraform and the Azure CLI.
-
----
-
-## Download this Repository
-
-```bash
-git clone https://github.com/mamonaco1973/azure-vmss.git
-cd azure-vmss
-```
-
----
-
-## Authenticate to Azure
+Sign in first:
 
 ```bash
 az login
 az account set --subscription "<your-subscription-id>"
 ```
 
----
+If this is your first time watching our content, we recommend starting with
+this video: [Azure + Terraform: Easy Setup](https://www.youtube.com/watch?v=j4aRjgH5H8Q).
 
-## Build the Code
-
-Run [check_env](check_env.sh) to validate your environment, then run [apply](apply.sh) to provision the infrastructure.
+## Deploy
 
 ```bash
+git clone https://github.com/mamonaco1973/azure-vmss.git
+cd azure-vmss
 ./apply.sh
 ```
 
-[apply.sh](apply.sh) runs `terraform init` and `terraform apply`, then automatically calls [validate.sh](validate.sh) to confirm the deployment is healthy. Note that the Application Gateway takes 5-8 minutes to provision.
-
----
-
-### Build Results
-
-When the deployment completes, the following resources are created:
-
-- **Networking:**
-  - A VNet (10.0.0.0/16) in centralus with two subnets:
-    - `vmss-subnet` (10.0.1.0/24) — VMSS instances
-    - `appgw-subnet` (10.0.2.0/24) — Application Gateway (dedicated, required by Azure)
-  - NAT Gateway with a static public IP for instance outbound access
-
-- **Security:**
-  - NSG on the VMSS subnet: allows inbound port 80
-  - NSG on the App Gateway subnet: allows port 80 and gateway manager ports 65200-65535
-
-- **Application Gateway:**
-  - Standard_v2, zone-redundant (zones 1 and 2)
-  - Static public IP with a unique DNS label (`vmss-appgw-<random>.centralus.cloudapp.azure.com`)
-  - HTTP health probe on `/` with 10-second intervals
-  - Layer 7 per-request load balancing — even distribution across instances
-
-- **VM Scale Set:**
-  - Ubuntu 24.04 LTS, Standard_B1s, spread across availability zones 1 and 2
-  - min 1, desired 4, max 6 instances
-  - Apache installed via cloud-init; displays Azure IMDS metadata page
-  - Azure Monitor autoscale driving scale-out and scale-in on CPU
-
----
-
-### Scaling Policies
-
-| Rule      | Condition  | Window  | Action      |
-|-----------|------------|---------|-------------|
-| scale-out | CPU > 60%  | 2 min   | +1 instance |
-| scale-in  | CPU < 60%  | 1 hour  | -1 instance |
-
-The long scale-in window (1 hour) prevents instances from being removed during demos or brief quiet periods.
-
----
-
-### Validate the Deployment
-
-[validate.sh](validate.sh) is called automatically by [apply.sh](apply.sh). It polls the Application Gateway until it responds, then samples 6 responses to confirm load balancing is working. Because the Application Gateway is Layer 7, each request is routed independently — different IP addresses across requests confirm even distribution.
+`apply.sh` runs `check_env.sh`, applies `01-vmss` (the Application Gateway
+takes 5 to 8 minutes) and runs `validate.sh`. That waits for the gateway to
+return HTTP 200 on `/plain`, samples ten responses to show the load
+balancing, and reports how long the deploy took to serve its first request:
 
 ```
 NOTE: App Gateway endpoint: http://vmss-appgw-12345.centralus.cloudapp.azure.com
@@ -103,24 +83,52 @@ NOTE: Sampling App Gateway responses...
   [2] 10.0.1.6
   [3] 10.0.1.5
   [4] 10.0.1.7
-  [5] 10.0.1.4
-  [6] 10.0.1.6
+  ...
 
 =================================================================================
   VM Scale Set — Deployment validated!
 =================================================================================
   LB : http://vmss-appgw-12345.centralus.cloudapp.azure.com
-=================================================================================
+---------------------------------------------------------------------------------
+  Time to first request : 512s
 ```
 
----
+## Try it
 
-### Clean Up Infrastructure
+1. Open the endpoint in a browser and refresh: the private IP, VM name and
+   zone change from request to request.
+2. Instances have no SSH access. Use Run Command, which goes through the
+   Azure agent rather than the network:
 
-When you are finished testing, you can remove all provisioned resources with:
+   ```bash
+   az vmss list-instances -g vmss-rg -n vmss-main \
+     --query "[].{id:instanceId, name:name}" -o table
+
+   az vmss run-command invoke -g vmss-rg -n vmss-main --instance-id 0 \
+     --command-id RunShellScript \
+     --scripts "cat /root/userdata.log" \
+     --query "value[0].message" -o tsv
+   ```
+
+3. To watch it scale out, load an instance's CPU the same way (for
+   example `--scripts "timeout 600 yes > /dev/null &"`) and watch the
+   instance count in the portal.
+
+## Teardown
 
 ```bash
 ./destroy.sh
 ```
 
-This will use Terraform to delete the resource group and everything inside it — VNet, NAT Gateway, Application Gateway, VM Scale Set, autoscale settings, NSGs, and all associated public IPs.
+`destroy.sh` destroys `01-vmss`. The provider is set to delete the resource
+group even if it still contains resources.
+
+## Notes
+
+- **Lab only.** HTTP only, and the gateway accepts it from anywhere.
+- The SSH key is generated by Terraform and never written out, so the
+  instances really are Run Command only.
+- In the portal, an instance's overview shows the NAT gateway's public IP;
+  the instances themselves have none.
+- The old README linked the AWS setup video under the Azure title; it now
+  links the Azure one.
